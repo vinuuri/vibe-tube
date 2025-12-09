@@ -11,8 +11,13 @@ const config = {
     preprocess: vitePreprocess(),
 
     kit: {
-        // 2. Используем импортированный адаптер
-        adapter: adapter()
+        // 2. Используем импортированный адаптер и включаем режим совместимости с Node.js
+        adapter: adapter({
+            platform: {
+                // Включает полифилы для базовых модулей Node.js (fs, path, crypto и др.)
+                compatibility: 'nodejs_compat'
+            }
+        })
     }
 };
 
