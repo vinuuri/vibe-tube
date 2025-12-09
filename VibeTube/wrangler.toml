@@ -1,0 +1,11 @@
+# wrangler.toml
+
+name = "vibetube-project"
+main = "./.svelte-kit/cloudflare/worker.js"
+compatibility_date = "2024-01-01"
+
+# Добавьте эту секцию
+[[d1_databases]]
+binding = "DB" # Используйте значение binding_name из шага 3.1
+database_name = "vibetube-db" # Имя базы данных
+database_id = "a3c18186-53fe-4a18-b79b-483fade1e71e" # Используйте UUID из шага 3.1

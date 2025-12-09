@@ -1,0 +1,80 @@
+{
+	"/": [],
+	"/api/auth/login": [
+		"src/routes/api/auth/login/+server.ts"
+	],
+	"/api/auth/logout": [
+		"src/routes/api/auth/logout/+server.ts"
+	],
+	"/api/auth/me": [
+		"src/routes/api/auth/me/+server.ts"
+	],
+	"/api/auth/register": [
+		"src/routes/api/auth/register/+server.ts"
+	],
+	"/api/comments": [
+		"src/routes/api/comments/+server.ts"
+	],
+	"/api/comments/[id]": [
+		"src/routes/api/comments/[id]/+server.ts"
+	],
+	"/api/comments/[id]/heart": [
+		"src/routes/api/comments/[id]/heart/+server.ts"
+	],
+	"/api/comments/[id]/like": [
+		"src/routes/api/comments/[id]/like/+server.ts"
+	],
+	"/api/comments/[id]/pin": [
+		"src/routes/api/comments/[id]/pin/+server.ts"
+	],
+	"/api/liked/videos": [
+		"src/routes/api/liked/videos/+server.ts"
+	],
+	"/api/likes": [
+		"src/routes/api/likes/+server.ts"
+	],
+	"/api/studio/comments": [
+		"src/routes/api/studio/comments/+server.ts"
+	],
+	"/api/studio/stats": [
+		"src/routes/api/studio/stats/+server.ts"
+	],
+	"/api/subscriptions": [
+		"src/routes/api/subscriptions/+server.ts"
+	],
+	"/api/users/[id]": [
+		"src/routes/api/users/[id]/+server.ts"
+	],
+	"/api/user/update": [
+		"src/routes/api/user/update/+server.ts"
+	],
+	"/api/videos": [
+		"src/routes/api/videos/+server.ts"
+	],
+	"/api/videos/[id]": [
+		"src/routes/api/videos/[id]/+server.ts"
+	],
+	"/api/videos/[id]/update": [
+		"src/routes/api/videos/[id]/update/+server.ts"
+	],
+	"/api/watch-history": [
+		"src/routes/api/watch-history/+server.ts"
+	],
+	"/channel/[id]": [],
+	"/history": [],
+	"/liked": [],
+	"/login": [],
+	"/my-videos": [],
+	"/register": [],
+	"/search": [],
+	"/settings": [],
+	"/studio": [],
+	"/studio/analytics": [],
+	"/studio/comments": [],
+	"/studio/edit/[id]": [],
+	"/studio/videos": [],
+	"/trending": [],
+	"/upload": [],
+	"/watch-later": [],
+	"/watch/[id]": []
+}
