@@ -4,6 +4,10 @@ name = "vibetube-project"
 main = "./.svelte-kit/cloudflare/worker.js"
 compatibility_date = "2024-01-01"
 
+# ⭐ ДОБАВЛЕНО: Флаг совместимости для модулей Node.js (fs, path, crypto и др.)
+# Это решает ошибки "Could not resolve 'fs'", "Could not resolve 'path'" и "Could not resolve 'crypto'".
+compatibility_flags = ["nodejs_compat"]
+
 # Добавьте эту секцию
 [[d1_databases]]
 binding = "DB" # Используйте значение binding_name из шага 3.1
