@@ -6,7 +6,8 @@
 // 1. Объявляем глобальный интерфейс Env, содержащий D1 Database binding.
 interface Env {
     // VIBETUBE_DB должен совпадать с "binding" в файле wrangler.toml
-    VIBETUBE_DB: DB; 
+    VIBETUBE_DB: DB;
+    MEDIA_BUCKET: R2Bucket; 
 }
 
 declare global {

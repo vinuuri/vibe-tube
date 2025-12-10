@@ -1,187 +1,239 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { Upload as UploadIcon, Video } from 'lucide-svelte';
-	import Header from '$lib/components/Header.svelte';
-	import Sidebar from '$lib/components/Sidebar.svelte';
-	import { language, translations } from '$lib/i18n';
+    import { onMount } from 'svelte';
+    import { Upload as UploadIcon, Video } from 'lucide-svelte';
+    import Header from '$lib/components/Header.svelte';
+    import Sidebar from '$lib/components/Sidebar.svelte';
+    import { language, translations } from '$lib/i18n';
 
-	let user: any = null;
-	let sidebarOpen = true;
+    let user: any = null;
+    let sidebarOpen = true;
 
-	$: lang = $language;
-	$: t = translations[lang];
-	let title = '';
-	let description = '';
-	let videoFile: File | null = null;
-	let thumbnailFile: File | null = null;
-	let uploading = false;
-	let error = '';
-	let dragOver = false;
+    $: lang = $language;
+    $: t = translations[lang];
+    let title = '';
+    let description = '';
+    let videoFile: File | null = null;
+    let thumbnailFile: File | null = null;
+    let uploading = false;
+    let error = '';
+    let dragOver = false;
+    // ⭐ НОВОЕ: Переменная для хранения длительности видео (в секундах) ⭐
+    let videoDuration = 0;
 
-	onMount(async () => {
-		const res = await fetch('/api/auth/me');
-		if (!res.ok) {
-			window.location.href = '/login';
-			return;
-		}
-		const data = await res.json();
-		user = data.user;
-	});
+    onMount(async () => {
+        const res = await fetch('/api/auth/me');
+        if (!res.ok) {
+            window.location.href = '/login';
+            return;
+        }
+        const data = await res.json();
+        user = data.user;
+    });
+    
+    // ⭐ НОВАЯ ФУНКЦИЯ: Определяет длительность файла с помощью HTML5 Video API ⭐
+    function getDurationFromVideoFile(file: File): Promise<number> {
+        return new Promise((resolve) => {
+            // Создаем временный элемент video
+            const video = document.createElement('video');
+            video.preload = 'metadata';
 
-	function handleVideoChange(e: Event) {
-		const input = e.target as HTMLInputElement;
-		if (input.files && input.files[0]) {
-			videoFile = input.files[0];
-		}
-	}
+            video.onloadedmetadata = function () {
+                window.URL.revokeObjectURL(video.src);
+                // Округляем до целого числа секунд
+                resolve(Math.floor(video.duration));
+            };
 
-	function handleThumbnailChange(e: Event) {
-		const input = e.target as HTMLInputElement;
-		if (input.files && input.files[0]) {
-			thumbnailFile = input.files[0];
-		}
-	}
+            video.onerror = function () {
+                // В случае ошибки возвращаем 0
+                resolve(0); 
+            };
+            
+            // Назначаем Blob URL файлу для загрузки метаданных
+            video.src = URL.createObjectURL(file);
+        });
+    }
 
-	function handleDrop(e: DragEvent) {
-		e.preventDefault();
-		dragOver = false;
-		
-		if (e.dataTransfer?.files && e.dataTransfer.files[0]) {
-			const file = e.dataTransfer.files[0];
-			if (file.type.startsWith('video/')) {
-				videoFile = file;
-			}
-		}
-	}
+    async function handleVideoChange(e: Event) {
+        const input = e.target as HTMLInputElement;
+        videoDuration = 0; // Сбрасываем длительность при новом выборе
+        
+        if (input.files && input.files[0]) {
+            videoFile = input.files[0];
+            
+            // ⭐ ВЫЗЫВАЕМ ФУНКЦИЮ: Получаем длительность асинхронно ⭐
+            videoDuration = await getDurationFromVideoFile(videoFile);
+            
+            if (videoDuration === 0) {
+                // Можно добавить предупреждение пользователю
+                console.warn("Could not determine video duration. Setting to 0.");
+            }
+        }
+    }
 
-	async function handleSubmit(e: Event) {
-		e.preventDefault();
-		error = '';
+    function handleThumbnailChange(e: Event) {
+        const input = e.target as HTMLInputElement;
+        if (input.files && input.files[0]) {
+            thumbnailFile = input.files[0];
+        }
+    }
 
-		if (!videoFile) {
-			error = lang === 'ru' ? 'Пожалуйста, выберите видеофайл' : 'Please select a video file';
-			return;
-		}
+    async function handleDrop(e: DragEvent) {
+        e.preventDefault();
+        dragOver = false;
+        videoDuration = 0; // Сбрасываем длительность
+        
+        if (e.dataTransfer?.files && e.dataTransfer.files[0]) {
+            const file = e.dataTransfer.files[0];
+            if (file.type.startsWith('video/')) {
+                videoFile = file;
+                // ⭐ ВЫЗЫВАЕМ ФУНКЦИЮ после перетаскивания ⭐
+                videoDuration = await getDurationFromVideoFile(videoFile);
+            }
+        }
+    }
 
-		if (!title.trim()) {
-			error = lang === 'ru' ? 'Пожалуйста, введите название' : 'Please enter a title';
-			return;
-		}
+    async function handleSubmit(e: Event) {
+        e.preventDefault();
+        error = '';
 
-		uploading = true;
+        if (!videoFile) {
+            error = lang === 'ru' ? 'Пожалуйста, выберите видеофайл' : 'Please select a video file';
+            return;
+        }
 
-		const formData = new FormData();
-		formData.append('title', title);
-		formData.append('description', description);
-		formData.append('video', videoFile);
-		if (thumbnailFile) {
-			formData.append('thumbnail', thumbnailFile);
-		}
+        if (!title.trim()) {
+            error = lang === 'ru' ? 'Пожалуйста, введите название' : 'Please enter a title';
+            return;
+        }
+        
+        // ⭐ ПРОВЕРКА ДЛИТЕЛЬНОСТИ ⭐
+        if (videoDuration === 0) {
+            error = lang === 'ru' ? 'Не удалось определить длительность видео. Попробуйте другой файл.' : 'Could not determine video duration. Please try another file.';
+            // Если вы не хотите блокировать загрузку, просто удалите этот блок `if`
+            // Но мы оставим его, чтобы избежать проблем в БД.
+            return;
+        }
 
-		const res = await fetch('/api/videos', {
-			method: 'POST',
-			body: formData
-		});
+        uploading = true;
 
-		if (res.ok) {
-			const data = await res.json();
-			window.location.href = `/watch/${data.video.id}`;
-		} else {
-			const data = await res.json();
-			error = data.error || (lang === 'ru' ? 'Ошибка загрузки' : 'Upload failed');
-			uploading = false;
-		}
-	}
+        const formData = new FormData();
+        formData.append('title', title);
+        formData.append('description', description);
+        formData.append('video', videoFile);
+        // ⭐ НОВОЕ: Добавляем длительность в FormData ⭐
+        formData.append('duration', videoDuration.toString()); 
+        
+        if (thumbnailFile) {
+            formData.append('thumbnail', thumbnailFile);
+        }
+
+        const res = await fetch('/api/videos', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            window.location.href = `/watch/${data.video.id}`;
+        } else {
+            const data = await res.json();
+            error = data.error || (lang === 'ru' ? 'Ошибка загрузки' : 'Upload failed');
+            uploading = false;
+        }
+    }
 </script>
 
 <svelte:head>
-	<title>Upload Video - VibeTube</title>
+    <title>Upload Video - VibeTube</title>
 </svelte:head>
 
 <div class="app">
-	<Header {user} onMenuClick={() => (sidebarOpen = !sidebarOpen)} />
-	<Sidebar isOpen={sidebarOpen} {user} />
-	<main class:sidebar-open={sidebarOpen}>
-		<div class="upload-container">
-			<div class="upload-card">
-				<div class="header">
-					<Video size={32} />
-					<h1>{t.uploadVideo}</h1>
-				</div>
+    <Header {user} onMenuClick={() => (sidebarOpen = !sidebarOpen)} />
+    <Sidebar isOpen={sidebarOpen} {user} />
+    <main class:sidebar-open={sidebarOpen}>
+        <div class="upload-container">
+            <div class="upload-card">
+                <div class="header">
+                    <Video size={32} />
+                    <h1>{t.uploadVideo}</h1>
+                </div>
 
-				<form on:submit={handleSubmit}>
-					{#if error}
-						<div class="error">{error}</div>
-					{/if}
+                <form on:submit={handleSubmit}>
+                    {#if error}
+                        <div class="error">{error}</div>
+                    {/if}
 
-					<div
-						class="drop-zone"
-						class:drag-over={dragOver}
-						role="button"
-						tabindex="0"
-						on:drop={handleDrop}
-						on:dragover={(e) => {
-							e.preventDefault();
-							dragOver = true;
-						}}
-						on:dragleave={() => (dragOver = false)}
-					>
-						<UploadIcon size={48} />
-						<p>{t.dragDrop}</p>
-						<span>{lang === 'ru' ? 'или' : 'or'}</span>
-						<label class="file-label">
-							<input type="file" accept="video/*" on:change={handleVideoChange} disabled={uploading} />
-							{t.selectFile}
-						</label>
-						{#if videoFile}
-							<p class="file-info">{lang === 'ru' ? 'Выбрано' : 'Selected'}: {videoFile.name}</p>
-						{/if}
-					</div>
+                    <div
+                        class="drop-zone"
+                        class:drag-over={dragOver}
+                        role="button"
+                        tabindex="0"
+                        on:drop={handleDrop}
+                        on:dragover={(e) => {
+                            e.preventDefault();
+                            dragOver = true;
+                        }}
+                        on:dragleave={() => (dragOver = false)}
+                    >
+                        <UploadIcon size={48} />
+                        <p>{t.dragDrop}</p>
+                        <span>{lang === 'ru' ? 'или' : 'or'}</span>
+                        <label class="file-label">
+                            <input type="file" accept="video/*" on:change={handleVideoChange} disabled={uploading} />
+                            {t.selectFile}
+                        </label>
+                        {#if videoFile}
+                            <p class="file-info">{lang === 'ru' ? 'Выбрано' : 'Selected'}: {videoFile.name}</p>
+                            {#if videoDuration > 0}
+                                <p class="file-info">{lang === 'ru' ? 'Длительность' : 'Duration'}: {videoDuration} {lang === 'ru' ? 'сек.' : 'sec.'}</p>
+                            {/if}
+                        {/if}
+                    </div>
 
-					<div class="form-group">
-						<label for="title">{t.title} *</label>
-						<input
-							id="title"
-							type="text"
-							bind:value={title}
-							placeholder={lang === 'ru' ? 'Введите название видео' : 'Enter video title'}
-							required
-							disabled={uploading}
-						/>
-					</div>
+                    <div class="form-group">
+                        <label for="title">{t.title} *</label>
+                        <input
+                            id="title"
+                            type="text"
+                            bind:value={title}
+                            placeholder={lang === 'ru' ? 'Введите название видео' : 'Enter video title'}
+                            required
+                            disabled={uploading}
+                        />
+                    </div>
 
-					<div class="form-group">
-						<label for="description">{t.description}</label>
-						<textarea
-							id="description"
-							bind:value={description}
-							placeholder={lang === 'ru' ? 'Расскажите зрителям о вашем видео' : 'Tell viewers about your video'}
-							rows="5"
-							disabled={uploading}
-						></textarea>
-					</div>
+                    <div class="form-group">
+                        <label for="description">{t.description}</label>
+                        <textarea
+                            id="description"
+                            bind:value={description}
+                            placeholder={lang === 'ru' ? 'Расскажите зрителям о вашем видео' : 'Tell viewers about your video'}
+                            rows="5"
+                            disabled={uploading}
+                        ></textarea>
+                    </div>
 
-					<div class="form-group">
-						<label for="thumbnail">{t.thumbnail} ({lang === 'ru' ? 'необязательно' : 'optional'})</label>
-						<input
-							id="thumbnail"
-							type="file"
-							accept="image/*"
-							on:change={handleThumbnailChange}
-							disabled={uploading}
-						/>
-						{#if thumbnailFile}
-							<p class="file-info">{lang === 'ru' ? 'Выбрано' : 'Selected'}: {thumbnailFile.name}</p>
-						{/if}
-					</div>
+                    <div class="form-group">
+                        <label for="thumbnail">{t.thumbnail} ({lang === 'ru' ? 'необязательно' : 'optional'})</label>
+                        <input
+                            id="thumbnail"
+                            type="file"
+                            accept="image/*"
+                            on:change={handleThumbnailChange}
+                            disabled={uploading}
+                        />
+                        {#if thumbnailFile}
+                            <p class="file-info">{lang === 'ru' ? 'Выбрано' : 'Selected'}: {thumbnailFile.name}</p>
+                        {/if}
+                    </div>
 
-					<button type="submit" class="btn-primary" disabled={uploading}>
-						{uploading ? t.uploading : t.uploadVideo}
-					</button>
-				</form>
-			</div>
-		</div>
-	</main>
+                    <button type="submit" class="btn-primary" disabled={uploading}>
+                        {uploading ? t.uploading : t.uploadVideo}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </main>
 </div>
 
 <style>
