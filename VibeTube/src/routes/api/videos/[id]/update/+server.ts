@@ -1,86 +1,113 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import db from '$lib/db';
+// УДАЛЯЕМ: import db from '$lib/db';
 import { getUserFromRequest } from '$lib/auth';
 import { sanitizeInput } from '$lib/utils';
-import { writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
+// УДАЛЯЕМ: import { writeFile, mkdir } from 'fs/promises';
+// УДАЛЯЕМ: import { join } from 'path';
 
 export const PUT: RequestHandler = async (event) => {
-	const user = getUserFromRequest(event);
+    const user = getUserFromRequest(event);
+    
+    // ⭐ НОВОЕ: Получаем D1 и R2 Bindings из event.platform.env ⭐
+    const db = event.platform?.env.DB;
+    const bucket = event.platform?.env.MEDIA_BUCKET;
 
-	if (!user) {
-		return json({ error: 'Unauthorized' }, { status: 401 });
-	}
+    if (!db || !bucket) {
+        return json({ error: 'Server configuration error: Database or Storage missing' }, { status: 500 });
+    }
 
-	try {
-		const formData = await event.request.formData();
-		const title = formData.get('title') as string;
-		const description = formData.get('description') as string;
-		const thumbnailFile = formData.get('thumbnail') as File | null;
-		const videoId = event.params.id;
+    if (!user) {
+        return json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-		console.log('Update video request:', { 
-			videoId, 
-			title, 
-			hasThumbnail: !!thumbnailFile,
-			thumbnailSize: thumbnailFile?.size 
-		});
+    try {
+        const formData = await event.request.formData();
+        const title = formData.get('title') as string;
+        const description = formData.get('description') as string;
+        const thumbnailFile = formData.get('thumbnail') as File | null;
+        const videoId = event.params.id;
 
-		if (!title) {
-			return json({ error: 'Title is required' }, { status: 400 });
-		}
+        console.log('Update video request:', { 
+            videoId, 
+            title, 
+            hasThumbnail: !!thumbnailFile,
+            thumbnailSize: thumbnailFile?.size 
+        });
 
-		// Sanitize user input to prevent XSS
-		const sanitizedTitle = sanitizeInput(title, 200);
-		const sanitizedDescription = sanitizeInput(description || '', 5000);
+        if (!title) {
+            return json({ error: 'Title is required' }, { status: 400 });
+        }
 
-		if (!sanitizedTitle.trim()) {
-			return json({ error: 'Title cannot be empty' }, { status: 400 });
-		}
+        // Sanitize user input to prevent XSS
+        const sanitizedTitle = sanitizeInput(title, 200);
+        const sanitizedDescription = sanitizeInput(description || '', 5000);
 
-		const video = db.prepare('SELECT * FROM videos WHERE id = ?').get(videoId) as any;
+        if (!sanitizedTitle.trim()) {
+            return json({ error: 'Title cannot be empty' }, { status: 400 });
+        }
 
-		if (!video) {
-			return json({ error: 'Video not found' }, { status: 404 });
-		}
+        // ⭐ D1: Проверка существования видео и прав пользователя (асинхронно) ⭐
+        const video = await db.prepare('SELECT * FROM videos WHERE id = ?')
+                                .bind(videoId)
+                                .first<{ user_id: number, thumbnail_url: string, thumbnail: string }>();
 
-		if (video.user_id !== user.id) {
-			return json({ error: 'Forbidden' }, { status: 403 });
-		}
+        if (!video) {
+            return json({ error: 'Video not found' }, { status: 404 });
+        }
 
-		let thumbnailUrl = video.thumbnail_url || video.thumbnail;
+        if (video.user_id !== user.id) {
+            return json({ error: 'Forbidden' }, { status: 403 });
+        }
 
-		if (thumbnailFile && thumbnailFile.size > 0) {
-			try {
-				const uploadsDir = join(process.cwd(), 'static', 'uploads');
-				await mkdir(uploadsDir, { recursive: true });
+        let thumbnailUrl = video.thumbnail_url || video.thumbnail;
 
-				const ext = thumbnailFile.name.split('.').pop();
-				const filename = `thumb_${videoId}_${Date.now()}.${ext}`;
-				const filePath = join(uploadsDir, filename);
-				const buffer = Buffer.from(await thumbnailFile.arrayBuffer());
-				await writeFile(filePath, buffer);
-				thumbnailUrl = `/uploads/${filename}`;
-				console.log('Thumbnail saved:', thumbnailUrl);
-			} catch (fileError) {
-				console.error('File upload error:', fileError);
-				return json({ error: 'Failed to upload thumbnail: ' + fileError.message }, { status: 500 });
-			}
-		}
+        if (thumbnailFile && thumbnailFile.size > 0) {
+            try {
+                // ⭐ R2: Логика загрузки миниатюры ⭐
+                const ext = thumbnailFile.name.split('.').pop();
+                const timestamp = Date.now();
+                
+                // Используем ключ, который явно указывает на владельца
+                const thumbnailKey = `thumbnails/${user.id}/${videoId}_${timestamp}.${ext}`;
+                
+                // Загрузка файла в R2
+                await bucket.put(thumbnailKey, thumbnailFile.stream(), {
+                    contentType: thumbnailFile.type || 'image/jpeg'
+                });
+                
+                // URL для доступа к файлу через Worker
+                thumbnailUrl = `/r2/${thumbnailKey}`; 
 
-		// Update both thumbnail fields for compatibility
-		db.prepare(`
-			UPDATE videos 
-			SET title = ?, description = ?, thumbnail_url = ?, thumbnail = ?
-			WHERE id = ?
-		`).run(sanitizedTitle, sanitizedDescription || null, thumbnailUrl, thumbnailUrl, videoId);
+                console.log('Thumbnail saved:', thumbnailUrl);
+            } catch (fileError: any) {
+                console.error('File upload error:', fileError);
+                return json({ error: 'Failed to upload thumbnail: ' + fileError.message }, { status: 500 });
+            }
+        }
 
-		const updatedVideo = db.prepare('SELECT * FROM videos WHERE id = ?').get(videoId);
+        // ⭐ D1: Обновление видео (асинхронно) ⭐
+        // Update both thumbnail fields for compatibility
+        await db.prepare(`
+            UPDATE videos 
+            SET title = ?, description = ?, thumbnail_url = ?, thumbnail = ?
+            WHERE id = ?
+        `).bind(
+            sanitizedTitle, 
+            sanitizedDescription || null, 
+            thumbnailUrl, 
+            thumbnailUrl, 
+            videoId
+        ).run();
 
-		return json({ video: updatedVideo });
-	} catch (error: any) {
-		console.error('Update error:', error);
-		return json({ error: 'Failed to update video: ' + error.message }, { status: 500 });
-	}
+        // ⭐ D1: Получение обновленного видео (асинхронно) ⭐
+        const updatedVideo = await db.prepare('SELECT * FROM videos WHERE id = ?')
+                                     .bind(videoId)
+                                     .first();
+
+        return json({ video: updatedVideo });
+    } catch (error: any) {
+        console.error('Update error:', error);
+        return json({ error: 'Failed to update video: ' + error.message }, { status: 500 });
+    }
 };

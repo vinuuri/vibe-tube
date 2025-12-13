@@ -28,7 +28,6 @@
 	},
 	"dependencies": {
 		"bcryptjs": "^3.0.3",
-		"better-sqlite3": "^12.4.1",
 		"cookie": "^1.0.2",
 		"jsonwebtoken": "^9.0.2",
 		"lucide-svelte": "^0.552.0"
