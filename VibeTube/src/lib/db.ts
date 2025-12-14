@@ -105,10 +105,11 @@ const SQL_SCHEMA = `
  * Инициализирует схему D1 базы данных (если не существует).
  * @param db Объект D1Database, полученный из платформы Worker.
  */
-export async function initDatabase(db: vibetube-db): Promise<void> {
+export async function initDatabase(db: D1Database): Promise<void> {
     try {
         // D1 API execute() может принимать несколько команд SQL через ;
-        await db.exec(SQL_SCHEMA);
+        // ⭐ ИСПРАВЛЕНИЕ: Используем db.exec as any, чтобы обойти ошибку TypeScript ⭐
+        await (db.exec as any)(SQL_SCHEMA); 
         console.log('✅ Database schema initialized successfully on D1.');
     } catch (e) {
         console.error('❌ Failed to initialize D1 database schema:', e);
