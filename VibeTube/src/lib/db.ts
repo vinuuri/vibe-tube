@@ -1,15 +1,3 @@
-// $lib/db.ts
-// Адаптировано для Cloudflare D1.
-
-// УДАЛЕНЫ: import Database from 'better-sqlite3' и import { join } from 'path'.
-
-// Этот файл теперь экспортирует только схему SQL и функцию для ее применения.
-// Сама база данных (db) будет доступна через 'platform.env.VIBETUBE_DB' в SvelteKit.
-
-/**
- * SQL-схема для инициализации базы данных D1.
- * Идентификаторы UNIQUE и FOREIGN KEY сохраняются.
- */
 const SQL_SCHEMA = `
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -107,8 +95,6 @@ const SQL_SCHEMA = `
  */
 export async function initDatabase(db: D1Database): Promise<void> {
     try {
-        // D1 API execute() может принимать несколько команд SQL через ;
-        // ⭐ ИСПРАВЛЕНИЕ: Используем db.exec as any, чтобы обойти ошибку TypeScript ⭐
         await (db.exec as any)(SQL_SCHEMA); 
         console.log('✅ Database schema initialized successfully on D1.');
     } catch (e) {
@@ -116,11 +102,3 @@ export async function initDatabase(db: D1Database): Promise<void> {
         throw e;
     }
 }
-
-// ⭐ ВАЖНО: Мы больше не экспортируем объект db, чтобы избежать конфликтов. ⭐
-// Вам нужно будет обновить ВСЕ места, где используется "import db from '$lib/db';"
-// на получение db из event.platform?.env.VIBETUBE_DB или event.platform?.env.DB.
-// (Имя "DB" соответствует вашему wrangler.toml.)
-
-// Добавим заглушку для старого импорта, но она должна быть удалена в вызывающих файлах.
-// export default {} as any; // Или полностью удалить экспорт по умолчанию

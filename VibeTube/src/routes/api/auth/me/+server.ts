@@ -1,19 +1,31 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getUserFromRequest } from '$lib/auth';
-import db from '$lib/db';
+// УДАЛЕНО: import db from '$lib/db';
 
 export const GET: RequestHandler = async (event) => {
-	const user = getUserFromRequest(event);
+    // ⭐ НОВОЕ: Получаем D1 Binding из event.platform.env ⭐
+    const db = event.platform?.env.DB;
 
-	if (!user) {
-		return json({ error: 'Unauthorized' }, { status: 401 });
-	}
+    if (!db) {
+        return json({ error: 'Database connection failed' }, { status: 500 });
+    }
 
-	const fullUser = db.prepare(`
-		SELECT id, username, email, avatar, banner, description, created_at
-		FROM users WHERE id = ?
-	`).get(user.id);
+    const user = getUserFromRequest(event);
 
-	return json({ user: fullUser });
+    if (!user) {
+        return json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // ⭐ D1: Получаем полные данные пользователя (асинхронно: .bind().first()) ⭐
+    const fullUser = await db.prepare(`
+        SELECT id, username, email, avatar, banner, description, created_at
+        FROM users WHERE id = ?
+    `).bind(user.id).first();
+
+    if (!fullUser) {
+        return json({ error: 'User not found' }, { status: 404 });
+    }
+
+    return json({ user: fullUser });
 };
